@@ -1,0 +1,33 @@
+{
+  "name": "cineflix-whatsapp-bot",
+  "version": "2.0.0",
+  "description": "Cineflix WhatsApp Movie Download Bot with Heroku Pairing Web UI & MongoDB Support",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys",
+    "pairing-code",
+    "heroku",
+    "mongodb",
+    "cineflix"
+  ],
+  "author": "Cineflix Team",
+  "license": "ISC",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mime-types": "^2.1.35",
+    "mongoose": "^8.9.5",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
