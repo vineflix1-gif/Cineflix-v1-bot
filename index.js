@@ -347,6 +347,26 @@ async function startBot() {
       console.log('✅ WhatsApp Bot Connected Successfully!');
       // Pre-load movie cache so first .movie command is instant
       loadMovies().then(m => console.log(`🎬 Pre-loaded ${m.length} movies into cache`)).catch(()=>{});
+
+      // Send connect notification to owner
+      const ownerNumber = process.env.OWNER_NUMBER || config.ownerNumber;
+      if(ownerNumber){
+        try{
+          const ownerJid = ownerNumber.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
+          const now = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Colombo', hour12: true });
+          const connectMsg =
+            `🟢 *Cineflix Bot Connected!* ✅\n\n` +
+            `🤖 *Bot:* Cineflix WhatsApp Bot\n` +
+            `⏰ *Time:* ${now} (SL)\n` +
+            `🌐 *Website:* ${process.env.WEBSITE_URL || config.websiteUrl}\n` +
+            `📦 *DB:* MongoDB Atlas + Firebase RTDB\n\n` +
+            `Bot successfully online and ready! 🚀`;
+          await sock.sendMessage(ownerJid, { text: connectMsg });
+          console.log(`📲 Connect notification sent to owner: ${ownerNumber}`);
+        } catch(e){
+          console.warn('Could not send owner connect msg:', e.message);
+        }
+      }
     }
   });
 
@@ -712,43 +732,44 @@ async function handleMovieDownloadRequest(sock, from, input, msg) {
   const movieYear = targetMovie.year ? `(${targetMovie.year})` : '';
 
   const statusText = `⏳ Sending *${movieTitle} ${movieYear} (${qualityText})* with Sinhala Subtitles | සිංහල උපසිරැසි සමඟ...`;
-  
   await sock.sendMessage(from, { text: statusText }, { quoted: msg });
-  await sock.sendMessage(from, { text: '✅' });
 
   try {
-    // If direct downloadable video file
     if (downloadUrl && downloadUrl !== '#' && downloadUrl.startsWith('http')) {
-      const isDirectFile = downloadUrl.match(/\.(mp4|mkv|avi|mov|zip|rar|srt)$/i) || downloadUrl.includes('/download') || downloadUrl.includes('direct');
-      if (isDirectFile) {
-        const fileName = `${movieTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${qualityText}.mp4`;
-        
-        await sock.sendMessage(
-          from,
-          {
-            document: { url: downloadUrl },
-            mimetype: 'video/mp4',
-            fileName: fileName,
-            caption: `🎬 *${movieTitle} ${movieYear}*\n\n📁 Quality: ${qualityText}\n📦 Size: ${targetDownload?.size || 'HD'}\n🗣 Subtitle: Cineflix Sinhala Subtitles (${process.env.WEBSITE_URL || config.websiteUrl})\n\n🌐 Downloaded via Cineflix: ${process.env.WEBSITE_URL || config.websiteUrl}`
-          },
-          { quoted: msg }
-        );
+      const fileName = `${movieTitle.replace(/[^a-zA-Z0-9 ]/g, '').trim()}_${qualityText}.mp4`;
+      const isMkv = downloadUrl.toLowerCase().includes('.mkv');
 
-        await sock.sendMessage(from, {
-          text: config.messages.downloadSuccess
-            .replace('{title}', movieTitle)
-            .replace('{quality}', qualityText)
-        });
-        return;
-      }
+      console.log(`📤 Sending file: ${fileName} from ${downloadUrl}`);
+
+      await sock.sendMessage(
+        from,
+        {
+          document: { url: downloadUrl },
+          mimetype: isMkv ? 'video/x-matroska' : 'video/mp4',
+          fileName: fileName,
+          caption: `🎬 *${movieTitle} ${movieYear}*\n\n📁 *Quality:* ${qualityText}\n📦 *Size:* ${targetDownload?.size || 'HD'}\n🗣 *Subtitle:* Cineflix Sinhala Subtitles\n\n🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`
+        },
+        { quoted: msg }
+      );
+
+      await sock.sendMessage(from, {
+        text: config.messages.downloadSuccess
+          .replace('{title}', movieTitle)
+          .replace('{quality}', qualityText)
+      });
+      return;
     }
 
-    // Direct text link delivery for web download links / mirror servers
-    const linkNotice = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n🗣 Subtitle: Cineflix Sinhala Subtitles (${process.env.WEBSITE_URL || config.websiteUrl})\n📥 *Direct Server Download Link:*\n🔗 ${downloadUrl || targetDownload?.tgLink || 'https://t.me/Cineflix_cloud_Bot'}\n\n🍿 *Watch Online & Download Web:* ${process.env.WEBSITE_URL || config.websiteUrl}`;
+    // No URL — send link as text
+    const tgLink = targetDownload?.tgLink || '';
+    const linkNotice = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n🗣 Subtitle: Cineflix Sinhala Subtitles\n📥 *Download Link:*\n🔗 ${tgLink || (process.env.WEBSITE_URL || config.websiteUrl)}\n\n🍿 *Watch Online:* ${process.env.WEBSITE_URL || config.websiteUrl}`;
     await sock.sendMessage(from, { text: linkNotice }, { quoted: msg });
+
   } catch (downloadErr) {
     console.error('Error delivering movie file:', downloadErr.message);
-    const fallbackMsg = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n🗣 Subtitle: Cineflix Sinhala Subtitles (${process.env.WEBSITE_URL || config.websiteUrl})\n📥 *Download Link:*\n🔗 ${downloadUrl || targetDownload?.tgLink || config.websiteUrl}\n\n🌐 Cineflix Web: ${process.env.WEBSITE_URL || config.websiteUrl}`;
+    // Fallback: send as text link
+    const tgLink = targetDownload?.tgLink || downloadUrl || config.websiteUrl;
+    const fallbackMsg = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n⚠️ File direct send එකෙ error ආවා. Link ගන්න:\n🔗 ${tgLink}\n\n🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`;
     await sock.sendMessage(from, { text: fallbackMsg }, { quoted: msg });
   }
 }
