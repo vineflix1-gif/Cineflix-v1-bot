@@ -128,7 +128,17 @@ async function useMongoDBAuthState() {
 }
 
 // Helper function to load movies from Firebase RTDB with fallbacks
+// ── Movie cache (refresh every 10 mins) ──────────────────────────────────────
+let _moviesCache = null;
+let _moviesCacheTime = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 async function loadMovies() {
+  // Return cache if fresh
+  if (_moviesCache && (Date.now() - _moviesCacheTime) < CACHE_TTL) {
+    return _moviesCache;
+  }
+
   try {
     const res = await fetch(`${FIREBASE_DB_URL}/movies.json`);
     if (res.ok) {
@@ -138,11 +148,22 @@ async function loadMovies() {
           id: val.id || key,
           ...val
         })).filter(Boolean);
-        if (arr.length > 0) return arr;
+        if (arr.length > 0) {
+          _moviesCache = arr;
+          _moviesCacheTime = Date.now();
+          console.log(`🎬 Movie cache updated: ${arr.length} movies`);
+          return arr;
+        }
       }
     }
   } catch (rtdbErr) {
     console.warn('Firebase RTDB fetch note:', rtdbErr.message);
+  }
+
+  // Return stale cache if fetch failed
+  if (_moviesCache) {
+    console.warn('Using stale movie cache');
+    return _moviesCache;
   }
 
   // Fallback to local JSON
@@ -150,12 +171,73 @@ async function loadMovies() {
     const moviesPath = path.resolve(__dirname, config.moviesJsonPath || '../src/data/initialMovies.json');
     if (fs.existsSync(moviesPath)) {
       const data = fs.readFileSync(moviesPath, 'utf8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      _moviesCache = parsed;
+      _moviesCacheTime = Date.now();
+      return parsed;
     }
   } catch (err) {
     console.error('Error loading local JSON movies:', err.message);
   }
   return [];
+}
+
+// ── Fuzzy title match with typo tolerance ────────────────────────────────────
+function normalize(str) {
+  return str.toLowerCase()
+    .replace(/[:\-_'"!?.]/g, ' ')  // punctuation → space
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Simple char-level similarity (0–1)
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const longer = a.length > b.length ? a : b;
+  const shorter = a.length > b.length ? b : a;
+  if (longer.length === 0) return 1;
+  let matches = 0;
+  for (let i = 0; i < shorter.length; i++) {
+    if (longer.includes(shorter[i])) matches++;
+  }
+  return matches / longer.length;
+}
+
+function fuzzyFindMovie(movies, query) {
+  const q = normalize(query);
+  const qWords = q.split(' ').filter(w => w.length > 1);
+
+  let bestMovie = null;
+  let bestScore = 0;
+
+  for (const m of movies) {
+    const title = normalize(m.title || '');
+    const titleWords = title.split(' ');
+
+    // Exact include check
+    if (title.includes(q) || q.includes(title)) {
+      return m; // instant match
+    }
+
+    // Word overlap score
+    let wordMatches = 0;
+    for (const qw of qWords) {
+      for (const tw of titleWords) {
+        const sim = similarity(qw, tw);
+        if (sim >= 0.75) { wordMatches++; break; }
+      }
+    }
+
+    const score = qWords.length > 0 ? wordMatches / qWords.length : 0;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMovie = m;
+    }
+  }
+
+  // Only return if at least 60% words matched
+  return bestScore >= 0.6 ? bestMovie : null;
 }
 
 async function startBot() {
@@ -263,6 +345,8 @@ async function startBot() {
       isConnected = true;
       latestQRImage = null;
       console.log('✅ WhatsApp Bot Connected Successfully!');
+      // Pre-load movie cache so first .movie command is instant
+      loadMovies().then(m => console.log(`🎬 Pre-loaded ${m.length} movies into cache`)).catch(()=>{});
     }
   });
 
@@ -592,19 +676,15 @@ async function handleMovieDownloadRequest(sock, from, input, msg) {
     targetMovie = movies.find(m => m.id && input.includes(String(m.id)));
   }
 
-  // 3. Title fuzzy match
+  // 3. Title fuzzy match (typo-tolerant)
   if (!targetMovie) {
-    const queryWithoutRes = lowerInput
+    const queryClean = normalize(lowerInput
       .replace(/hi cineflix!|i want to download|via whatsapp|movie code:|\./gi, '')
       .replace(/480p|720p|1080p/gi, '')
-      .replace(/\(\d{4}\)/g, '')
-      .trim();
+      .replace(/\(\d{4}\)/g, ''));
 
-    if (queryWithoutRes.length >= 2) {
-      targetMovie = movies.find(m => {
-        const titleLower = (m.title || '').toLowerCase();
-        return titleLower.includes(queryWithoutRes) || queryWithoutRes.includes(titleLower);
-      });
+    if (queryClean.length >= 2) {
+      targetMovie = fuzzyFindMovie(movies, queryClean);
     }
   }
 
