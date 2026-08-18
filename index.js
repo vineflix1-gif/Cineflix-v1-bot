@@ -731,46 +731,119 @@ async function handleMovieDownloadRequest(sock, from, input, msg) {
   const movieTitle = targetMovie.title;
   const movieYear = targetMovie.year ? `(${targetMovie.year})` : '';
 
-  const statusText = `⏳ Sending *${movieTitle} ${movieYear} (${qualityText})* with Sinhala Subtitles | සිංහල උපසිරැසි සමඟ...`;
-  await sock.sendMessage(from, { text: statusText }, { quoted: msg });
+  // ── Movie Details Card with Poster Image ─────────────────────────────────
+  const posterUrl = targetMovie.poster || targetMovie.backdrop || '';
+  const genre     = targetMovie.genre  || '';
+  const rating    = targetMovie.rating || '';
+  const runtime   = targetMovie.runtime || '';
+  const desc      = (targetMovie.description || targetMovie.desc || '').substring(0, 180);
+  const size      = targetDownload?.size || '';
+
+  const detailCaption =
+    `🎬 *${movieTitle} ${movieYear}*\n` +
+    `${'─'.repeat(28)}\n` +
+    (genre   ? `🎭 *Genre:* ${genre}\n`      : '') +
+    (rating  ? `⭐ *Rating:* ${rating}/10\n` : '') +
+    (runtime ? `⏱ *Runtime:* ${runtime}\n`  : '') +
+    `📁 *Quality:* ${qualityText}\n` +
+    (size    ? `📦 *Size:* ${size}\n`        : '') +
+    `🗣 *Subtitles:* Sinhala ✅\n` +
+    `${'─'.repeat(28)}\n` +
+    (desc    ? `📝 ${desc}${desc.length >= 180 ? '...' : ''}\n\n` : '') +
+    `⏳ *Sending file... please wait* 🚀\n\n` +
+    `🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`;
 
   try {
-    if (downloadUrl && downloadUrl !== '#' && downloadUrl.startsWith('http')) {
-      const fileName = `${movieTitle.replace(/[^a-zA-Z0-9 ]/g, '').trim()}_${qualityText}.mp4`;
-      const isMkv = downloadUrl.toLowerCase().includes('.mkv');
+    if (posterUrl && posterUrl.startsWith('http')) {
+      // Send poster image with details caption
+      const posterFetch = await fetch(posterUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (posterFetch.ok) {
+        const posterBuf = Buffer.from(await posterFetch.arrayBuffer());
+        await sock.sendMessage(from, {
+          image: posterBuf,
+          caption: detailCaption
+        }, { quoted: msg });
+      } else {
+        throw new Error('poster fetch failed');
+      }
+    } else {
+      throw new Error('no poster');
+    }
+  } catch (_) {
+    // Fallback: text only card
+    await sock.sendMessage(from, { text: detailCaption }, { quoted: msg });
+  }
 
-      console.log(`📤 Sending file: ${fileName} from ${downloadUrl}`);
+  if (!downloadUrl || downloadUrl === '#' || !downloadUrl.startsWith('http')) {
+    // No URL at all — send tgLink or website
+    const tgLink = targetDownload?.tgLink || '';
+    await sock.sendMessage(from, {
+      text: `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n🗣 Sinhala Subtitles\n📥 *Download Link:*\n🔗 ${tgLink || (process.env.WEBSITE_URL || config.websiteUrl)}\n\n🍿 ${process.env.WEBSITE_URL || config.websiteUrl}`
+    }, { quoted: msg });
+    return;
+  }
 
-      await sock.sendMessage(
-        from,
-        {
-          document: { url: downloadUrl },
-          mimetype: isMkv ? 'video/x-matroska' : 'video/mp4',
-          fileName: fileName,
-          caption: `🎬 *${movieTitle} ${movieYear}*\n\n📁 *Quality:* ${qualityText}\n📦 *Size:* ${targetDownload?.size || 'HD'}\n🗣 *Subtitle:* Cineflix Sinhala Subtitles\n\n🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`
-        },
-        { quoted: msg }
-      );
+  const isMkv  = downloadUrl.toLowerCase().includes('.mkv');
+  const mime   = isMkv ? 'video/x-matroska' : 'video/mp4';
+  const ext    = isMkv ? 'mkv' : 'mp4';
+  const safeTitle = movieTitle.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+  const fileName  = `${safeTitle}_${qualityText}.${ext}`;
+
+  console.log(`📤 Attempting file send: ${fileName} | ${downloadUrl}`);
+
+  try {
+    // Method 1: Fetch buffer manually (handles redirects, auth headers)
+    const fetchRes = await fetch(downloadUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': process.env.WEBSITE_URL || 'https://cineflix-lk.vercel.app' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status}`);
+
+    const buffer = Buffer.from(await fetchRes.arrayBuffer());
+    console.log(`✅ Fetched ${(buffer.length / 1024 / 1024).toFixed(1)}MB`);
+
+    await sock.sendMessage(from, {
+      document: buffer,
+      mimetype: mime,
+      fileName: fileName
+    }, { quoted: msg });
+
+    await sock.sendMessage(from, {
+      text: config.messages.downloadSuccess
+        .replace('{title}', movieTitle)
+        .replace('{quality}', qualityText)
+    });
+
+  } catch (bufErr) {
+    console.warn(`⚠️ Buffer fetch failed (${bufErr.message}), trying URL method...`);
+
+    try {
+      // Method 2: Let Baileys fetch directly via URL
+      await sock.sendMessage(from, {
+        document: { url: downloadUrl },
+        mimetype: mime,
+        fileName: fileName
+      }, { quoted: msg });
 
       await sock.sendMessage(from, {
         text: config.messages.downloadSuccess
           .replace('{title}', movieTitle)
           .replace('{quality}', qualityText)
       });
-      return;
+
+    } catch (urlErr) {
+      console.error(`❌ Both methods failed: ${urlErr.message}`);
+      // Final fallback — send link as text
+      const tgLink = targetDownload?.tgLink || '';
+      await sock.sendMessage(from, {
+        text: `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n⚠️ Auto-send fail. Link copy කරලා download කරන්න:\n🔗 ${downloadUrl}\n${tgLink ? `\n📱 Telegram: ${tgLink}` : ''}\n\n🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`
+      }, { quoted: msg });
     }
-
-    // No URL — send link as text
-    const tgLink = targetDownload?.tgLink || '';
-    const linkNotice = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n🗣 Subtitle: Cineflix Sinhala Subtitles\n📥 *Download Link:*\n🔗 ${tgLink || (process.env.WEBSITE_URL || config.websiteUrl)}\n\n🍿 *Watch Online:* ${process.env.WEBSITE_URL || config.websiteUrl}`;
-    await sock.sendMessage(from, { text: linkNotice }, { quoted: msg });
-
-  } catch (downloadErr) {
-    console.error('Error delivering movie file:', downloadErr.message);
-    // Fallback: send as text link
-    const tgLink = targetDownload?.tgLink || downloadUrl || config.websiteUrl;
-    const fallbackMsg = `🎬 *${movieTitle} ${movieYear} (${qualityText})*\n\n⚠️ File direct send එකෙ error ආවා. Link ගන්න:\n🔗 ${tgLink}\n\n🌐 ${process.env.WEBSITE_URL || config.websiteUrl}`;
-    await sock.sendMessage(from, { text: fallbackMsg }, { quoted: msg });
   }
 }
 
