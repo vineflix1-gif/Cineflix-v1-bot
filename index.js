@@ -222,15 +222,21 @@ async function startBot() {
       isConnected = false;
       latestQRImage = null;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+      // Code 440 = CONNECTION_REPLACED (same account logged in elsewhere)
+      // Code 401/403/405/loggedOut = session invalid
+      const isLoggedOut   = statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403 || statusCode === 405;
+      const isReplaced    = statusCode === 440; // Another device took over
+      const shouldReconnect = !isLoggedOut;
+
       console.log(`⚠️ Connection closed (code ${statusCode}), reconnecting: ${shouldReconnect}`);
 
-      // If disconnected due to invalid session or logged out, wipe session so QR code regenerates
-      if (statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403 || statusCode === 405) {
-        console.log('🧹 Clearing invalid session data from MongoDB to force fresh QR code generation...');
+      if (isLoggedOut || isReplaced) {
+        console.log('🧹 Clearing session (code ' + statusCode + ') to force fresh QR...');
         try {
           if (mongoose.connection.readyState === 1) {
             await BaileysAuth.deleteMany({});
+            console.log('🗑️  MongoDB session cleared.');
           }
           const authFolder = path.join(__dirname, 'auth_info_baileys');
           if (fs.existsSync(authFolder)) {
@@ -239,9 +245,20 @@ async function startBot() {
         } catch (clearErr) {
           console.error('Error clearing session:', clearErr.message);
         }
+
+        if (isReplaced) {
+          // Wait longer before reconnect to avoid immediate conflict loop
+          console.log('⏳ Waiting 15s before reconnect (CONNECTION_REPLACED)...');
+          setTimeout(startBot, 15000);
+          return;
+        }
       }
 
-      setTimeout(startBot, 3000);
+      if (shouldReconnect) {
+        setTimeout(startBot, 3000);
+      } else {
+        console.log('🔴 Logged out permanently. Please restart and scan QR again.');
+      }
     } else if (connection === 'open') {
       isConnected = true;
       latestQRImage = null;
