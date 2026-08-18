@@ -1,0 +1,18 @@
+{
+  "botName": "Cineflix Movie Bot 🎬",
+  "prefix": ".",
+  "websiteUrl": "https://cineflix-lk.vercel.app",
+  "targetGroupJid": "120363411804070695@g.us",
+  "groupInviteCode": "E81OYFeX3nW9meDUAt9a7B",
+  "mongodbUri": "mongodb+srv://ccransika_db_user:Pc1u7xrzGEn4LJvw@cluster0.sntej6n.mongodb.net/cineflix_bot?retryWrites=true&w=majority",
+  "moviesJsonPath": "../src/data/initialMovies.json",
+  "messages": {
+    "welcome": "🎬 *Cineflix WhatsApp Bot ට ස්වාගතයි!*\n\n✨ ඔබට ඕනෑ Movie හෝ Series නම type කරන්න, නැතිනම් website ලෙ Download button click කරන්න!\n\n🌐 *Website:* https://cineflix-lk.vercel.app\n📥 *Commands:*\n• .movie [name] - Movie search\n• .ping - Bot status check\n\n🍿 *Unlimited Movies | Endless Entertainment*",
+    "queued": "හලෝ! ⏳ *Request Queued!*\n\n{mention} ඔයා ඉල්ලපු *{title} ({quality})* movie එක queue එකට එකතු වුණා.\n\nmovie එක ready වුණ ගමන් මේ group එකටම එවන්නම්! 🍿",
+    "processing": "✅ *Direct link ready! Uploading...*\n\n_{title}_ — This may take a few minutes depending on the file size. 🎬",
+    "downloadSuccess": "✅ *{title} ({quality})* Movie Download Complete!\n\n🍿 Cineflix ලෙ නැරඹීමෙන් ඔබේ Cinema Experience ලස්සන කරගන්න!\n\n🌐 https://cineflix-lk.vercel.app",
+    "notFound": "❌ Movie හොයාගත්තේ නෑ. Movie නම check කරලා ආයෙ try කරන්න, නැත්නම් website ලෙ search කරන්න.\n\n🌐 https://cineflix-lk.vercel.app",
+    "thankYou": "✅ *ආයුබෝවන් {mention}!* ඔබ ඉල්ලූ *{title}* සාර්ථකව ලැබුණා! 🎬\n\nසිංහල Subtitles play වීමට *MX Player* හෝ *VLC Player* use කරන්න.\n\nගැටලුවක් ඇත්නම් admin කෙනෙකු contact කරන්න. 😊\n\n🌐 https://cineflix-lk.vercel.app",
+    "error": "⚠️ Error occurred. Please try again or use direct download on website.\n\n🌐 https://cineflix-lk.vercel.app"
+  }
+}
