@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cineflix Bot Dashboard 🎬</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #080a0f;
+      color: #f3f4f6;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .glass-card {
+      background: rgba(18, 24, 38, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+  
+  <div class="w-full max-w-md glass-card rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+    
+    <!-- Header -->
+    <div class="text-center space-y-2">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 mb-2">
+        <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12.012 2c-5.506 0-9.989 4.478-9.99 9.984a9.964 9.964 0 001.333 4.993L2 22l5.233-1.37a9.934 9.934 0 004.779 1.221h.005c5.505 0 9.988-4.478 9.989-9.984.001-2.669-1.036-5.176-2.923-7.062A9.924 9.924 0 0012.012 2z"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-black text-white tracking-tight">Cineflix Movie Bot 🎬</h1>
+      <p class="text-xs text-emerald-400 font-semibold">WhatsApp QR Scan & Pairing</p>
+    </div>
+
+    <!-- Connection Status Badge -->
+    <div id="statusBadge" class="p-3.5 rounded-2xl bg-gray-900 border border-gray-800 flex items-center justify-between text-xs">
+      <span class="text-gray-400 font-semibold">Bot Status:</span>
+      <span id="statusText" class="px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span>
+        Connecting...
+      </span>
+    </div>
+
+    <!-- Tabs: QR Code vs Pairing Code -->
+    <div class="flex items-center bg-gray-950 p-1 rounded-2xl border border-gray-800">
+      <button
+        id="tabQrBtn"
+        onclick="switchTab('qr')"
+        class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow"
+      >
+        📷 Scan Web QR Code
+      </button>
+      <button
+        id="tabPairBtn"
+        onclick="switchTab('pair')"
+        class="flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-gray-400 hover:text-white"
+      >
+        🔢 8-Digit Pairing Code
+      </button>
+    </div>
+
+    <!-- TAB 1: WEB QR CODE DISPLAY -->
+    <div id="tabQrContent" class="space-y-4 text-center">
+      <p class="text-xs text-gray-300">Scan this QR code using WhatsApp (Settings → Linked Devices → Link a Device):</p>
+      
+      <div class="relative w-64 h-64 mx-auto bg-white p-3 rounded-2xl shadow-inner flex items-center justify-center border-4 border-emerald-500/40">
+        <img id="qrImageDisplay" src="" alt="WhatsApp QR Code" class="w-full h-full object-contain hidden" />
+        <div id="qrLoading" class="text-gray-500 text-xs font-medium space-y-2">
+          <div class="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p>Generating Web QR Code...</p>
+        </div>
+      </div>
+      
+      <button
+        onclick="resetSession()"
+        class="w-full py-2.5 px-4 rounded-xl bg-red-600/20 hover:bg-red-600 border border-red-500/40 text-red-300 hover:text-white text-xs font-bold transition shadow"
+      >
+        🔄 Reset Session & Get New QR Code
+      </button>
+
+      <p class="text-[11px] text-gray-400">QR code auto-refreshes every few seconds on this web page.</p>
+    </div>
+
+    <!-- TAB 2: PAIRING CODE FORM -->
+    <div id="tabPairContent" class="hidden space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+          Enter Your WhatsApp Phone Number
+        </label>
+        <input
+          type="text"
+          id="phoneNumber"
+          placeholder="e.g. 94771234567"
+          class="w-full bg-gray-950 border border-gray-700/80 rounded-2xl px-4 py-3 text-sm text-white font-mono placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-all"
+        />
+        <p class="text-[11px] text-gray-400 mt-1">Include country code without '+' sign (e.g. 94 for Sri Lanka).</p>
+      </div>
+
+      <button
+        id="btnGetPairing"
+        onclick="requestPairingCode()"
+        class="w-full py-3.5 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-[1.01]"
+      >
+        Get WhatsApp Pairing Code
+      </button>
+
+      <div id="pairingResult" class="hidden space-y-3 p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center">
+        <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider block">Your 8-Digit Pairing Code</span>
+        <div class="bg-black/80 py-3.5 px-4 rounded-xl border border-emerald-500/50 flex items-center justify-between">
+          <code id="pairingCodeDisplay" class="text-2xl sm:text-3xl font-black font-mono text-emerald-300 tracking-widest flex-1">
+            ----
+          </code>
+          <button
+            onclick="copyCode()"
+            class="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white text-xs font-bold transition-all border border-emerald-500/40 ml-2"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Database Status -->
+    <div id="dbStatus" class="p-3 rounded-xl bg-gray-900/60 border border-gray-800 text-[11px] text-gray-400 text-center">
+      Database: <span id="dbModeText" class="text-white font-semibold">MongoDB Atlas Connected</span>
+    </div>
+
+  </div>
+
+<script>
+  function switchTab(tab) {
+    const qrBtn = document.getElementById('tabQrBtn');
+    const pairBtn = document.getElementById('tabPairBtn');
+    const qrContent = document.getElementById('tabQrContent');
+    const pairContent = document.getElementById('tabPairContent');
+
+    if (tab === 'qr') {
+      qrBtn.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow';
+      pairBtn.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-gray-400 hover:text-white';
+      qrContent.classList.remove('hidden');
+      pairContent.classList.add('hidden');
+    } else {
+      pairBtn.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all bg-emerald-600 text-white shadow';
+      qrBtn.className = 'flex-1 py-2.5 rounded-xl text-xs font-bold transition-all text-gray-400 hover:text-white';
+      pairContent.classList.remove('hidden');
+      qrContent.classList.add('hidden');
+    }
+  }
+
+  async function resetSession() {
+    if (!confirm('Are you sure you want to reset session and generate a new QR Code?')) return;
+    try {
+      const res = await fetch('/api/reset');
+      const data = await res.json();
+      alert(data.message || 'Session reset successfully!');
+      fetchQrCode();
+    } catch (e) {
+      alert('Error resetting session: ' + e.message);
+    }
+  }
+
+  async function fetchQrCode() {
+    try {
+      const res = await fetch('/api/qr');
+      const data = await res.json();
+      const qrImg = document.getElementById('qrImageDisplay');
+      const qrLoading = document.getElementById('qrLoading');
+
+      if (data.qrImage) {
+        qrImg.src = data.qrImage;
+        qrImg.classList.remove('hidden');
+        qrLoading.classList.add('hidden');
+      } else if (data.connected) {
+        qrLoading.innerHTML = '✅ <b>Bot Already Connected!</b>';
+        qrImg.classList.add('hidden');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      const textEl = document.getElementById('statusText');
+      const dbTextEl = document.getElementById('dbModeText');
+
+      if (data.connected) {
+        textEl.className = 'px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1.5';
+        textEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Connected ✅';
+      } else {
+        textEl.className = 'px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-400 font-bold uppercase tracking-wider flex items-center gap-1.5';
+        textEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-400 animate-ping"></span> Ready to Connect';
+      }
+
+      if (data.database) {
+        dbTextEl.textContent = data.database;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function requestPairingCode() {
+    const phoneInput = document.getElementById('phoneNumber').value.trim();
+    const btn = document.getElementById('btnGetPairing');
+    const resultBox = document.getElementById('pairingResult');
+    const codeDisplay = document.getElementById('pairingCodeDisplay');
+
+    if (!phoneInput) {
+      alert('Please enter your WhatsApp phone number!');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Generating Pairing Code...';
+
+    try {
+      const res = await fetch('/api/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneInput })
+      });
+      const data = await res.json();
+
+      if (data.code) {
+        codeDisplay.textContent = data.code;
+        resultBox.classList.remove('hidden');
+      } else {
+        alert(data.error || 'Failed to generate pairing code.');
+      }
+    } catch (err) {
+      alert('Error requesting pairing code: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Get WhatsApp Pairing Code';
+    }
+  }
+
+  function copyCode() {
+    const code = document.getElementById('pairingCodeDisplay').textContent.trim();
+    navigator.clipboard.writeText(code);
+    alert('Pairing Code copied to clipboard: ' + code);
+  }
+
+  fetchStatus();
+  fetchQrCode();
+  setInterval(() => {
+    fetchStatus();
+    fetchQrCode();
+  }, 4000);
+</script>
+</body>
+</html>
